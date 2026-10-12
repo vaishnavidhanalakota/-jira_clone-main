@@ -1,5 +1,7 @@
+
 package com.example.jira.controller;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.bson.types.ObjectId;
@@ -27,19 +29,24 @@ public class Projectcontroller {
     private final Projectrepository projectrepository;
     private final UserRepository userRepository;
 
-    public Projectcontroller(Projectrepository projectrepository, UserRepository userRepository) {
+    public Projectcontroller(
+            Projectrepository projectrepository,
+            UserRepository userRepository) {
         this.projectrepository = projectrepository;
         this.userRepository = userRepository;
     }
 
     @PostMapping
     public Project createProject(@RequestBody Project project) {
+
         if (project.getName() == null || project.getName().isBlank()) {
             throw new IllegalArgumentException("Project name is required");
         }
+
         if (project.getMemberIds() == null) {
-            project.setMemberIds(new java.util.ArrayList<>());
+            project.setMemberIds(new ArrayList<>());
         }
+
         return projectrepository.save(project);
     }
 
@@ -50,20 +57,36 @@ public class Projectcontroller {
 
     @GetMapping("/{id}")
     public ProjectResponse getProjectById(@PathVariable String id) {
+
+        if (!ObjectId.isValid(id)) {
+            throw new IllegalArgumentException("Invalid project ID");
+        }
+
         Project project = projectrepository.findById(new ObjectId(id))
-                .orElseThrow(() -> new RuntimeException("Project not found"));
+                .orElseThrow(() ->
+                        new RuntimeException("Project not found"));
 
-        // Fetch owner
-        User owner = userRepository.findById(new ObjectId(project.getOwnerId()))
-                .orElse(null);
+        User owner = null;
 
-        // Fetch members
-        List<ObjectId> memberObjectIds = project.getMemberIds() == null
-                ? List.of()
-                : project.getMemberIds().stream().filter(id -> id != null && ObjectId.isValid(id))
-                    .map(ObjectId::new).toList();
+        if (project.getOwnerId() != null
+                && ObjectId.isValid(project.getOwnerId())) {
+            owner = userRepository
+                    .findById(new ObjectId(project.getOwnerId()))
+                    .orElse(null);
+        }
 
-        List<User> members = userRepository.findByIdIn(memberObjectIds);
+        List<ObjectId> memberObjectIds =
+                project.getMemberIds() == null
+                        ? List.of()
+                        : project.getMemberIds().stream()
+                                .filter(memberId ->
+                                        memberId != null
+                                        && ObjectId.isValid(memberId))
+                                .map(ObjectId::new)
+                                .toList();
+
+        List<User> members =
+                userRepository.findByIdIn(memberObjectIds);
 
         return new ProjectResponse(
                 project.getId(),
@@ -74,19 +97,39 @@ public class Projectcontroller {
     }
 
     @PutMapping("/{id}")
-    public Project updaProject(@PathVariable String id, @RequestBody Project updated) {
+    public Project updaProject(
+            @PathVariable String id,
+            @RequestBody Project updated) {
+
+        if (!ObjectId.isValid(id)) {
+            throw new IllegalArgumentException("Invalid project ID");
+        }
+
         Project project = projectrepository.findById(new ObjectId(id))
-                .orElseThrow(() -> new RuntimeException("project not found"));
+                .orElseThrow(() ->
+                        new RuntimeException("Project not found"));
 
         project.setName(updated.getName());
         project.setDescription(updated.getDescription());
-        project.setMemberIds(updated.getMemberIds());
+
+        if (updated.getMemberIds() != null) {
+            project.setMemberIds(updated.getMemberIds());
+        }
+
         return projectrepository.save(project);
     }
 
     @DeleteMapping("/{id}")
     public void deleteproject(@PathVariable String id) {
+
+        if (!ObjectId.isValid(id)) {
+            throw new IllegalArgumentException("Invalid project ID");
+        }
+
+        if (!projectrepository.existsById(new ObjectId(id))) {
+            throw new RuntimeException("Project not found");
+        }
+
         projectrepository.deleteById(new ObjectId(id));
     }
-
 }
